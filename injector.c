@@ -1154,7 +1154,7 @@ void give_result(FILE* f)
 				if (cs_insn_group(capstone_handle, capstone_insn, X86_GRP_VM) ||
 				    cs_insn_group(capstone_handle, capstone_insn, X86_GRP_RTM) ||
 				    cs_insn_group(capstone_handle, capstone_insn, X86_GRP_3DNOW))
-					result = (result_t) {0};
+					result.valid = 0;
 			}
 			else {
 #if RAW_REPORT_DISAS_MNE 

@@ -1,4 +1,4 @@
-#!/usr/bin/python
+#!/usr/bin/env python3
 
 # we had a much more automated and intelligent approach to reducing the log, but
 # could not come up with a reasonable way to differentiate between a modr/m byte
@@ -204,13 +204,13 @@ def disassemble_capstone(arch, data):
         return ("", "")
 
     try:
-        (address, size, mnemonic, op_str) = m.disasm_lite(data, 0, 1).next()
+        (address, size, mnemonic, op_str) = next(m.disasm_lite(data, 0, 1))
     except StopIteration:
         mnemonic="(unk)"
         op_str=""
         size = 0
 
-    return ("%s %s" % (mnemonic, op_str), hexlify(data[:size]))
+    return ("%s %s" % (mnemonic, op_str), hexlify(data[:size]).decode())
 
 signals = {
         1:   "sighup",
@@ -315,7 +315,7 @@ def disassemble(disassembler, bitness, data):
                     stderr=subprocess.PIPE
                     ).communicate()
 
-        disas = cleanup(result)
+        disas = cleanup(result.decode())
 
         # raw
         result, errors = \
@@ -326,7 +326,7 @@ def disassemble(disassembler, bitness, data):
                     stderr=subprocess.PIPE
                     ).communicate()
 
-        raw = cleanup(result)
+        raw = cleanup(result.decode())
 
         temp_file.close()
 
@@ -341,25 +341,27 @@ def cleanup(disas):
     return disas
 
 def instruction_length(raw):
-    return len(raw)/2
+    l = len(raw)
+    assert l % 2 == 0
+    return l // 2
 
 def print_catalog(c, depth=0):
     for v in c.v:
-        print "  " * (depth) + hexlify(v.raw) + " " + summarize_prefixes(v)
+        print("  " * (depth) + hexlify(v.raw) + " " + summarize_prefixes(v))
     for k in c.d:
-        print "  " * depth + "%02x" % ord(k) + ":"
+        print("  " * depth + "%02x" % ord(k) + ":")
         print_catalog(c.d[k], depth+1)
 
 def strip_prefixes(i, prefixes):
-    while i and ord(i[0]) in prefixes:
+    while i and i[0] in prefixes:
         i = i[1:]
     return i
 
 def get_prefixes(i, prefixes):
     p = set()
     for b in i:
-        if ord(b) in prefixes:
-            p.add(ord(b))
+        if b in prefixes:
+            p.add(b)
         else:
             break
     return p
@@ -434,17 +436,17 @@ if __name__ == "__main__":
     instructions = []
     processor = Processor()
 
-    print
-    print "beginning summarization."
-    print "note: this process may take up to an hour to complete, please be patient."
-    print
+    print()
+    print("beginning summarization.")
+    print("note: this process may take up to an hour to complete, please be patient.")
+    print()
 
-    print "loading sifter log:"
+    print("loading sifter log:")
     with open(sys.argv[1], "r") as f:
         lines = f.readlines()
         f.seek(0)
         for (i, l) in enumerate(lines):
-            progress(i, len(lines)-1, refresh=len(lines)/1000)
+            progress(i, len(lines)-1, refresh=len(lines)//1000)
             if l.startswith("#"):
                 #TODO: this is not robust
                 if "arch:" in l and "64" in l:
@@ -475,11 +477,11 @@ if __name__ == "__main__":
         prefixes.extend(prefixes_64)
 
     # condense prefixed instructions 
-    print "condensing prefixes:"
+    print("condensing prefixes:")
     all_results = {} # lookup table for condensed result to all results
     d = {} # lookup table for base instruction to instruction summary
     for (c, i) in enumerate(instructions):
-        progress(c, len(instructions) - 1, refresh=len(instructions)/1000)
+        progress(c, len(instructions) - 1, refresh=len(instructions)//1000)
         s = strip_prefixes(i.raw, prefixes)
         p = get_prefixes(i.raw, prefixes)
         if len(s) == len(i.raw):
@@ -506,7 +508,7 @@ if __name__ == "__main__":
             #all_results[d[s]] = [i]
     instructions = list(d.values())
 
-    def bin(instructions, index, base="", bin_progress=0, progress_out_of=None):
+    def bin(instructions, index, base=b"", bin_progress=0, progress_out_of=None):
         valids = merge_sets(instructions, 'valids')
         lengths = merge_sets(instructions, 'lengths')
         signums = merge_sets(instructions, 'signums')
@@ -529,12 +531,12 @@ if __name__ == "__main__":
             else:
                 c.v.append(i)
                 bin_progress = bin_progress + 1
-                progress(bin_progress, progress_out_of, refresh=progress_out_of/1000)
+                progress(bin_progress, progress_out_of, refresh=progress_out_of//1000)
         for b in c.d:
-            (c.d[b], bin_progress) = bin(c.d[b], index + 1, base + b, bin_progress, progress_out_of)
+            (c.d[b], bin_progress) = bin(c.d[b], index + 1, base + bytes([b]), bin_progress, progress_out_of)
         return (c, bin_progress)
 
-    print "binning results:"
+    print("binning results:")
     (c,_) = bin(instructions, 0)
 
     # open first catalog entries
@@ -565,7 +567,7 @@ if __name__ == "__main__":
         if c.v:
             return c.v[0]
         else:
-            return get_solo_leaf(c.d[c.d.keys()[0]])
+            return get_solo_leaf(c.d[list(c.d.keys())[0]])
 
     def build_instruction_summary(c, index=0, summary=None, lookup=None):
         if not summary:
@@ -576,17 +578,17 @@ if __name__ == "__main__":
             lookup[len(summary)] = c
             suffix = ".." * (min(c.lengths) - len(c.base)) + " " + \
                             ".." * (max(c.lengths) - min(c.lengths))
-            summary.append("  " * index + "> " + hexlify(c.base) + suffix)
+            summary.append("  " * index + "> " + hexlify(c.base).decode() + suffix)
             if not c.collapsed:
                 for b in sorted(c.d):
                     build_instruction_summary(c.d[b], index + 1, summary, lookup)
                 for v in sorted(c.v):
                     lookup[len(summary)] = v
-                    summary.append("  " * index + "  " + hexlify(v.raw))
+                    summary.append("  " * index + "  " + hexlify(v.raw).decode())
         else:
             v = get_solo_leaf(c)
             lookup[len(summary)] = v
-            summary.append("  " * index + "  " + hexlify(v.raw))
+            summary.append("  " * index + "  " + hexlify(v.raw).decode())
         return (summary, lookup)
 
     (summary, lookup) = build_instruction_summary(c)
@@ -605,7 +607,7 @@ if __name__ == "__main__":
         gui.box(gui.window, infobox_x, infobox_y, infobox_width, infobox_height, gui.gray(.3))
 
 	#TODO: (minor) this should really be done properly with windows
-        for i in xrange(infobox_y + 1, infobox_y + infobox_height - 1):
+        for i in range(infobox_y + 1, infobox_y + infobox_height - 1):
             gui.window.addstr(i, infobox_x + 1, " " * (infobox_width - 2), gui.gray(0))
 
         if type(o) == Catalog:
@@ -614,7 +616,7 @@ if __name__ == "__main__":
             gui.window.addstr(line, infobox_x + 2, "instruction group:", curses.color_pair(gui.RED))
             line = line + 1
 
-            g = hexlify(o.base)
+            g = hexlify(o.base).decode()
             if not g:
                 g = "(all)"
             gui.window.addstr(line, infobox_x + 2, "%s" % g, gui.gray(1))
@@ -631,7 +633,7 @@ if __name__ == "__main__":
 
             gui.window.addstr(line, infobox_x + 2, "example instruction from this group:", gui.gray(.5))
             line = line + 1
-            gui.window.addstr(line, infobox_x + 2, "%s" % hexlify(o.example), gui.gray(.8))
+            gui.window.addstr(line, infobox_x + 2, "%s" % hexlify(o.example).decode(), gui.gray(.8))
             line = line + 1
 
             line = line + 1
@@ -668,7 +670,7 @@ if __name__ == "__main__":
 
             gui.window.addstr(line, infobox_x + 2, "instruction:", curses.color_pair(gui.RED))
             line = line + 1
-            gui.window.addstr(line, infobox_x + 2, "%-30s" % hexlify(o.raw), gui.gray(1))
+            gui.window.addstr(line, infobox_x + 2, "%-30s" % hexlify(o.raw).decode(), gui.gray(1))
             line = line + 1
 
             line = line + 1
@@ -710,7 +712,7 @@ if __name__ == "__main__":
                     dis_data = o.raw
                 else:
                     # select a prefixed version as an exemplar instruction
-                    dis_data = chr(next(iter(o.prefixes))) + o.raw
+                    dis_data = bytes([next(iter(o.prefixes))]) + o.raw
 
                 if disassembler == CAPSTONE:
                     (asm, raw) = disassemble_capstone(processor.architecture, dis_data)
@@ -775,13 +777,13 @@ if __name__ == "__main__":
         if key == ord('k'):
             textbox.scroll_up()
         elif key == ord('K'):
-            for _ in xrange(10):
+            for _ in range(10):
                 textbox.scroll_up()
                 smooth_scroll()
         elif key == ord('j'):
             textbox.scroll_down()
         elif key == ord('J'):
-            for _ in xrange(10):
+            for _ in range(10):
                 textbox.scroll_down()
                 smooth_scroll()
         elif key == ord('l'):
@@ -839,20 +841,20 @@ if __name__ == "__main__":
 
     title = "PROCESSOR ANALYSIS SUMMARY"
     width = 50
-    print "=" * width
-    print " " * ((width - len(title)) / 2) + title
-    print "=" * width
-    print
-    print processor.model_name
-    print
-    print " arch:       %d" % processor.architecture
-    print " processor:  %s" % processor.processor
-    print " vendor_id:  %s" % processor.vendor_id
-    print " cpu_family: %s" % processor.cpu_family
-    print " model:      %s" % processor.model
-    print " stepping:   %s" % processor.stepping
-    print " microcode:  %s" % processor.microcode
-    print 
+    print("=" * width)
+    print(" " * ((width - len(title)) // 2) + title)
+    print("=" * width)
+    print()
+    print(processor.model_name)
+    print()
+    print(" arch:       %d" % processor.architecture)
+    print(" processor:  %s" % processor.processor)
+    print(" vendor_id:  %s" % processor.vendor_id)
+    print(" cpu_family: %s" % processor.cpu_family)
+    print(" model:      %s" % processor.model)
+    print(" stepping:   %s" % processor.stepping)
+    print(" microcode:  %s" % processor.microcode)
+    print() 
 
     #TODO:
     # high level summary at end:
@@ -860,5 +862,5 @@ if __name__ == "__main__":
     #   software bugs detected: x
     #   hardware bugs detected: x
     for x in summary:
-        print x
+        print(x)
 

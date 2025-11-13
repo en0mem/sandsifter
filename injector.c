@@ -1157,6 +1157,10 @@ void give_result(FILE* f)
 #if RAW_REPORT_DISAS_VAL
 				disas.val=true;
 #endif
+				if (cs_insn_group(capstone_handle, capstone_insn, X86_GRP_VM) ||
+				    cs_insn_group(capstone_handle, capstone_insn, X86_GRP_RTM) ||
+				    cs_insn_group(capstone_handle, capstone_insn, X86_GRP_3DNOW))
+					result = (result_t) {0};
 			}
 			else {
 #if RAW_REPORT_DISAS_MNE 
@@ -1435,6 +1439,7 @@ int main(int argc, char** argv)
 	if (cs_open(CS_ARCH_X86, CS_MODE, &capstone_handle) != CS_ERR_OK) {
 		exit(1);
 	}
+	cs_option(capstone_handle, CS_OPT_DETAIL, CS_OPT_ON);
 	capstone_insn = cs_malloc(capstone_handle);
 #endif
 

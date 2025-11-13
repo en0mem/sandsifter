@@ -742,8 +742,7 @@ void inject(int insn_size)
 	/* could probably fork here to avoid risk of destroying the controlling process */
 	/* only really comes up in random injection, just roll the dice for now */
 
-	int i;
-	int preamble_length=(&preamble_end-&preamble_start);
+	size_t preamble_length=(&preamble_end-&preamble_start);
 	static bool have_state=false;
 
 	if (!USE_TF) { preamble_length=0; }
@@ -752,12 +751,8 @@ void inject(int insn_size)
 
 	/* optimization - don't bother to write protect page */
 	//	assert(!mprotect(packet_buffer,PAGE_SIZE,PROT_READ|PROT_WRITE|PROT_EXEC));
-	for (i=0; i<preamble_length; i++) {
-		((char*)packet)[i]=((char*)&preamble_start)[i];
-	}
-	for (i=0; i<MAX_INSN_LENGTH && i<insn_size; i++) {
-		((char*)packet)[i+preamble_length]=inj.i.bytes[i];
-	}
+	memcpy(packet, &preamble_start, preamble_length);
+	memcpy(packet + preamble_length, inj.i.bytes, insn_size);
 	//	assert(!mprotect(packet_buffer,PAGE_SIZE,PROT_READ|PROT_EXEC));
 
 	if (config.enable_null_access) {
@@ -773,9 +768,8 @@ void inject(int insn_size)
 		have_state=true;
 		configure_sig_handler(state_handler);
 		__asm__ __volatile__ ("ud2\n");
+		configure_sig_handler(fault_handler);
 	}
-
-	configure_sig_handler(fault_handler);
 
 #if __x86_64__
 	__asm__ __volatile__ ("\

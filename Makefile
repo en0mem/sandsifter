@@ -29,13 +29,13 @@
 #TODO: i don't know if i was ever able to get a statically linked capstone to
 # work like i describe above
 
+CFLAGS := -Wall -no-pie
+LIBS := -pthread -l:libcapstone.a
+
 all: injector
 
-injector: injector.o
-	$(CC) $(CFLAGS) $< -O3 -Wall -l:libcapstone.a -o $@ -pthread
-
-%.o: %.c
-	$(CC) $(CFLAGS) -c $< -o $@ -Wall
+injector: injector.c
+	$(CC) $(CFLAGS) $< -o $@ $(LIBS)
 
 clean:
-	rm *.o injector
+	rm injector

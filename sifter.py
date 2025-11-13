@@ -247,22 +247,24 @@ class Poll:
         self.disas = disassembler
 
         if self.sync:
-            with open(SYNC, "w") as f:
-                f.write("#\n")
-                f.write("# %s\n" % command_line)
-                f.write("# %s\n" % injector.command)
-                f.write("#\n")
-                f.write("# cpu:\n")
-                cpu = get_cpu_info()
-                for l in cpu:
-                    f.write("# %s\n" % l)
-                f.write("# %s  v  l  s  c\n" % (" " * 28))
+            self.sync_file = f = open(SYNC, "w")
+            f.write("#\n")
+            f.write("# %s\n" % command_line)
+            f.write("# %s\n" % injector.command)
+            f.write("#\n")
+            f.write("# cpu:\n")
+            cpu = get_cpu_info()
+            for l in cpu:
+                f.write("# %s\n" % l)
+            f.write("# %s  v  l  s  c\n" % (" " * 28))
 
     def start(self):
         self.poll_thread = threading.Thread(target=self.poll)
         self.poll_thread.start()
 
     def stop(self):
+        self.sync_file.flush()
+        self.sync_file.close()
         self.poll_thread.join()
         while self.ts.run:
             time.sleep(.1)
@@ -297,8 +299,7 @@ class Poll:
                             self.T.ad[insn] = r
                         self.T.ac = self.T.ac + 1
                         if self.sync:
-                            with open(SYNC, "a") as f:
-                                f.write(result_string(insn, self.T.r))
+                            self.sync_file.write(result_string(insn, self.T.r))
             else:
                 if self.injector.process.poll() is not None:
                     self.ts.run = False

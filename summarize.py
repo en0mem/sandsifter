@@ -139,9 +139,10 @@ disassemblers = {
                     "objdump"
                     " -D -b binary -mi386 -Mx86-64 -Mintel --no-show-raw-insn {0}"
                     "| tr A-Z a-z"           # lowercase
-                    "| grep '0:' -A 99"      # crop header
-                    "| sed '/.byte /Q'"      # stop at invalid byte
+                    "| grep '^   0:' -A 99"  # crop header
+                    "| sed '/\\.byte /Q'"    # stop at invalid byte
                     "| sed '/(bad)/Q'"       # stop at invalid byte
+                    "| sed '/\\.\\.\\./Q'"
                     "| sed 's/.*:\\s*//'"    # crop instructions
                     "| awk 'ORS=\" \"'"      # join to one line
                     ,
@@ -149,9 +150,10 @@ disassemblers = {
                     "objdump"
                     " -D -b binary -mi386 -Mx86-64 -Mintel --insn-width=16 {0}"
                     "| tr A-Z a-z"           # lowercase
-                    "| grep '0:' -A 99"      # crop header
-                    "| sed '/.byte /Q'"      # stop at invalid byte
+                    "| grep '^   0:' -A 99"  # crop header
+                    "| sed '/\\.byte /Q'"    # stop at invalid byte
                     "| sed '/(bad)/Q'"       # stop at invalid byte
+                    "| sed '/\\.\\.\\./Q'"
                     "| sed 's/.*:\\s*\\(\\([0-9a-f][0-9a-f] \\)*\\).*/\\1/'" # crop raw
                     "| tr -d '\\n '"         # join to one line and remove spaces
                 ),
@@ -275,7 +277,7 @@ class Processor(object):
     model_name = "n/a"
     stepping = "n/a"
     microcode = "n/a"
-    architecture = 32
+    architecture = 64
 
 class Catalog(object):
     def __init__(self, d, v, base='', count=0, collapsed=True, example='',
@@ -299,12 +301,13 @@ def check_disassembler(name):
                 stdout=subprocess.PIPE,
                 stderr=subprocess.PIPE
                 ).communicate()
-    return result.strip() != ""
+    return len(result.strip()) != 0
 
 def disassemble(disassembler, bitness, data):
     if supported[disassembler] and disassemblers[disassembler][bitness]:
         temp_file = tempfile.NamedTemporaryFile()
         temp_file.write(data)
+        temp_file.flush()
 
         # disassemble
         result, errors = \
@@ -457,13 +460,13 @@ if __name__ == "__main__":
                     processor.vendor_id = l.split(":",1)[1].strip()
                 elif "cpu family\t:" in l:
                     processor.cpu_family = l.split(":",1)[1].strip()
-                elif "model\t:" in l:
-                    processor.cpu_family = l.split(":",1)[1].strip()
+                elif "model\t\t:" in l:
+                    processor.model = l.split(":",1)[1].strip()
                 elif "model name\t:" in l:
                     processor.model_name = l.split(":",1)[1].strip()
                 elif "stepping\t:" in l:
                     processor.stepping = l.split(":",1)[1].strip()
-                elif "stepping\t:" in l:
+                elif "microcode\t:" in l:
                     processor.microcode = l.split(":",1)[1].strip()
                 continue
             v = l.split()
@@ -719,16 +722,18 @@ if __name__ == "__main__":
                 else:
                     (asm, raw) = disassemble(disassembler, processor.architecture, dis_data)
                 if not asm:
-                    asm = "(unknown)"
+                    asm = "(unk)"
                 if not raw:
                     raw = "n/a"
+                else:
+                    raw += f" ({instruction_length(raw)})"
 
                 gui.window.addstr(line, infobox_x + 2, "%s:" % disassembler, gui.gray(.5))
                 line = line + 1
 
-                gui.window.addstr(line, infobox_x + 4, "%-30s" % asm, gui.gray(.8))
+                gui.window.addstr(line, infobox_x + 4, asm, gui.gray(.8))
                 line = line + 1
-                gui.window.addstr(line, infobox_x + 4, "%-30s" % raw, gui.gray(.5))
+                gui.window.addstr(line, infobox_x + 4, raw, gui.gray(.5))
                 line = line + 1
 
                 line = line + 1

@@ -95,18 +95,6 @@ class Tests:
         h, m = divmod(m, 60)
         return "%02d:%02d:%02d.%02d" % (h, m, int(s), int(100*(s-int(s))) )
 
-class Tee(object):
-    def __init__(self, name, mode):
-        self.file = open(name, mode)
-        self.stdout = sys.stdout
-        sys.stdout = self
-    def __del__(self):
-        sys.stdout = self.stdout
-        self.file.close()
-    def write(self, data):
-        self.file.write(data)
-        self.stdout.write(data)
-
 # capstone disassembler
 md = None
 def disas_capstone(b):
@@ -679,29 +667,28 @@ def get_cpu_info():
     return cpu
 
 def dump_artifacts(r, injector, command_line):
-    global arch
-    tee = Tee(LOG, "w")
-    tee.write("#\n")
-    tee.write("# %s\n" % command_line)
-    tee.write("# %s\n" % injector.command)
-    tee.write("#\n")
-    tee.write("# insn tested: %d\n" % r.ic)
-    tee.write("# artf found:  %d\n" % r.ac)
-    tee.write("# runtime:     %s\n" % r.elapsed())
-    tee.write("# seed:        %d\n" % injector.settings.seed)
-    tee.write("# arch:        %s\n" % arch)
-    tee.write("# date:        %s\n" % time.strftime("%Y-%m-%d %H:%M:%S"))
-    tee.write("#\n")
-    tee.write("# cpu:\n")
+    with open(LOG, "w") as f:
+        f.write("#\n")
+        f.write("# %s\n" % command_line)
+        f.write("# %s\n" % injector.command)
+        f.write("#\n")
+        f.write("# insn tested: %d\n" % r.ic)
+        f.write("# artf found:  %d\n" % r.ac)
+        f.write("# runtime:     %s\n" % r.elapsed())
+        f.write("# seed:        %d\n" % injector.settings.seed)
+        f.write("# arch:        %s\n" % arch)
+        f.write("# date:        %s\n" % time.strftime("%Y-%m-%d %H:%M:%S"))
+        f.write("#\n")
+        f.write("# cpu:\n")
 
-    cpu = get_cpu_info()
-    for l in cpu:
-        tee.write("# %s\n" % l) 
+        cpu = get_cpu_info()
+        for l in cpu:
+            f.write("# %s\n" % l) 
 
-    tee.write("# %s  v  l  s  c\n" % (" " * 28))
-    for k in sorted(list(r.ad)):
-        v = r.ad[k]
-        tee.write(result_string(k, v))
+        f.write("# %s  v  l  s  c\n" % (" " * 28))
+        for k in sorted(list(r.ad)):
+            v = r.ad[k]
+            f.write(result_string(k, v))
 
 def cleanup(gui, poll, injector, ts, tests, command_line, args):
     ts.run = False
